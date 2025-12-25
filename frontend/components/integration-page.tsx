@@ -5,15 +5,19 @@ import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 
 export default function IntegrationPage() {
-  const [copied, setCopied] = useState(false);
+  const { addToast } = useToast();
   const apiKey = "lk_live_sk_test_1234567890abcdefghijklmnopqrstuvwxyz";
 
   const handleCopy = () => {
     navigator.clipboard.writeText(apiKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    addToast({
+      title: "Copied",
+      description: "API key copied to clipboard.",
+      variant: "success",
+    });
   };
 
   // Show only the prefix, mask the rest
@@ -52,7 +56,7 @@ export default function IntegrationPage() {
                 className="absolute right-2 top-1/2 -translate-y-1/2 h-8"
                 variant="outline"
               >
-                {copied ? "Copied!" : "Copy"}
+                Copy
               </Button>
             </div>
             <Button

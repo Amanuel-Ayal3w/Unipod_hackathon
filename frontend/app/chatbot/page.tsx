@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,7 +77,14 @@ export default function ChatbotPage() {
       <div className="container mx-auto px-4 py-8 max-w-4xl flex-1 flex flex-col">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-semibold mb-2">Chatbot</h1>
+          <div className="flex items-start justify-between mb-2">
+            <h1 className="text-3xl font-semibold">Chatbot</h1>
+            <Link href="/chatbot-config">
+              <Button variant="outline" size="sm">
+                Configure
+              </Button>
+            </Link>
+          </div>
           <p className="text-muted-foreground">
             Test and interact with your AI assistant.
           </p>
