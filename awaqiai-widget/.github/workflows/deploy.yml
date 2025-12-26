@@ -1,0 +1,91 @@
+name: Deploy to AWS S3
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Select environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+  push:
+    branches:
+      - main
+      - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine Environment
+        id: determine-env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENVIRONMENT="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            ENVIRONMENT="production"
+          elif [ "${{ github.ref }}" == "refs/heads/staging" ]; then
+            ENVIRONMENT="staging"
+          else
+            ENVIRONMENT="staging"  # default fallback
+          fi
+          echo "ENVIRONMENT=${ENVIRONMENT}" >> $GITHUB_ENV
+          echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+          echo "Deploying to ${ENVIRONMENT} environment"
+
+      - name: Set AWS Role Based on Environment
+        run: |
+          if [ "${{ env.ENVIRONMENT }}" == "production" ]; then
+            echo "AWS_ROLE_ARN=arn:aws:iam::${{secrets.AWS_ACCOUNT_ID}}:role/github-actions-production" >> $GITHUB_ENV
+            echo "BUCKET_NAME=blueye-widget" >> $GITHUB_ENV
+            echo "API_BASE_URL=${{ secrets.API_BASE_URL_PRODUCTION }}" >> $GITHUB_ENV
+            echo "AWS_CLOUDFRONT_DISTRIBUTION_ID=${{ secrets.AWS_CLOUDFRONT_DISTRIBUTION_PRODUCTION }}" >> $GITHUB_ENV
+          else
+            echo "AWS_ROLE_ARN=arn:aws:iam::${{secrets.AWS_ACCOUNT_ID}}:role/github-actions-staging" >> $GITHUB_ENV
+            echo "BUCKET_NAME=blueye-widget-staging" >> $GITHUB_ENV
+            echo "API_BASE_URL=${{ secrets.API_BASE_URL_STAGING }}" >> $GITHUB_ENV
+            echo "AWS_CLOUDFRONT_DISTRIBUTION_ID=${{ secrets.AWS_CLOUDFRONT_DISTRIBUTION_STAGING }}" >> $GITHUB_ENV
+          fi
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-session-name: GitHubActionsSession
+          aws-region: eu-north-1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+        env:
+          VITE_API_BASE_URL: ${{ env.API_BASE_URL }}
+      - name: Deploy to S3
+        run: |
+          aws s3 cp ./dist/blueyeai-widget.umd.js s3://${{ env.BUCKET_NAME }}
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ env.AWS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"

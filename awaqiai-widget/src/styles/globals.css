@@ -1,0 +1,41 @@
+@import 'tailwindcss' prefix(bw);
+@plugin 'tailwindcss-animate';
+
+.blueyeai-widget-container {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --primary: 222 65% 33%;
+  --primary-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 222 65% 33%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --color-gray-200: 214.3 31.8% 91.4%;
+  --color-gray-300: 212.7 26.8% 83.9%;
+  --color-gray-400: 215.4 16.3% 56.9%;
+  --color-gray-500: 220 8.9% 46.1%;
+  --color-gray-600: 215.3 19.3% 34.5%;
+  --color-gray-700: 215.3 25% 26.7%;
+  --color-red-500: 0 84.2% 60.2%;
+  --color-blue-500: 217.2 91.2% 59.8%;
+
+  * {
+    font-family: 'Roboto', sans-serif;
+    border-color: hsl(var(--color-gray-200, currentcolor));
+  }
+
+  @keyframes typing-dot {
+    0%,
+    100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-4px);
+    }
+  }
+
+  .bw\\:animate-typing-dot {
+    animation: typing-dot 1s infinite;
+  }
+} 
