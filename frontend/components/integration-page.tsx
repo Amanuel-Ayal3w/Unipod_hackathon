@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function IntegrationPage() {
   const { addToast } = useToast();
-  const apiKey = "lk_live_sk_test_1234567890abcdefghijklmnopqrstuvwxyz";
+  const apiKey = "sk_demo_change_me";
 
   const handleCopy = () => {
     navigator.clipboard.writeText(apiKey);
@@ -20,8 +19,7 @@ export default function IntegrationPage() {
     });
   };
 
-  // Show only the prefix, mask the rest
-  const maskedKey = "lk_live_" + "•".repeat(32);
+  const maskedKey = "sk_demo_" + "•".repeat(16);
 
   return (
     <div className="min-h-screen bg-background">
@@ -44,12 +42,7 @@ export default function IntegrationPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="relative">
-              <Input
-                type="text"
-                value={maskedKey}
-                readOnly
-                className="pr-20 font-mono text-base py-3"
-              />
+              <Input type="text" value={maskedKey} readOnly className="pr-20 font-mono text-base py-3" />
               <Button
                 onClick={handleCopy}
                 size="sm"
@@ -68,10 +61,10 @@ export default function IntegrationPage() {
           </CardContent>
         </Card>
 
-        {/* Section 2: Widget Configuration Card */}
+        {/* Section 2: Widget & SDK Installation */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Widget Installation</CardTitle>
+            <CardTitle>Widget & SDK Installation</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-start gap-6">
@@ -81,13 +74,46 @@ export default function IntegrationPage() {
                 </div>
               </div>
               <div className="flex-1 space-y-4">
-                <p className="text-muted-foreground">
-                  Embed the AI support bot on your government portal by adding our JavaScript SDK to your footer.
+                <p className="text-muted-foreground text-sm">
+                  Install the JavaScript SDK in your app, or drop the widget snippet into your site footer.
                 </p>
+
+                <div className="space-y-3 text-xs font-mono bg-muted rounded-md p-4 overflow-x-auto">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">npm (SDK)</p>
+                  <pre className="whitespace-pre-wrap">
+{`npm install @supportbot/sdk
+
+import { createSupportBotClient } from "@supportbot/sdk";
+
+const client = createSupportBotClient({
+  baseUrl: "${process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://api.example.com"}",
+  apiKey: "${apiKey}",
+});
+
+const res = await client.sendMessage({
+  message: "Hello from my app",
+});`}
+                  </pre>
+                </div>
+
+                <div className="space-y-3 text-xs font-mono bg-muted rounded-md p-4 overflow-x-auto">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Browser widget</p>
+                  <pre className="whitespace-pre-wrap">
+{`<script type="module">
+  import { attachSupportBotWidget } from "https://your-cdn.com/supportbot-sdk.js";
+
+  attachSupportBotWidget({
+    baseUrl: "${process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://api.example.com"}",
+    apiKey: "${apiKey}",
+    welcomeMessage: "Hi! How can I help you today?",
+  });
+</script>`}
+                  </pre>
+                </div>
+
                 <Link href="/documentation">
                   <Button variant="outline" size="lg" className="w-full sm:w-auto">
-                    View Integration Docs{" "}
-                    <span className="ml-2">↗</span>
+                    View Full Docs <span className="ml-2">↗</span>
                   </Button>
                 </Link>
               </div>

@@ -1,5 +1,7 @@
 from typing import Any, Dict, Optional
 
+from postgrest.exceptions import APIError
+
 from .db import get_supabase_client
 
 
@@ -38,17 +40,28 @@ def save_user_llm_config(
 
 
 def get_user_llm_config(bot_id: str) -> Optional[Dict[str, Any]]:
+    """Fetch latest active Google LLM config for a bot.
+
+    For demo purposes, if the user_api_keys table does not exist or any
+    API error occurs, we simply return None and let callers fall back
+    to environment-based defaults.
+    """
+
     client = get_supabase_client()
-    resp = (
-        client.table(TABLE_NAME)
-        .select("*")
-        .eq("bot_id", bot_id)
-        .eq("is_active", True)
-        .eq("provider", "google")
-        .order("created_at", desc=True)
-        .limit(1)
-        .execute()
-    )
+    try:
+        resp = (
+            client.table(TABLE_NAME)
+            .select("*")
+            .eq("bot_id", bot_id)
+            .eq("is_active", True)
+            .eq("provider", "google")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+    except APIError:
+        # Table missing or other API error: no stored config
+        return None
 
     rows = getattr(resp, "data", None) or []
     if not rows:

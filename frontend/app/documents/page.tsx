@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { UploadIcon, FileIcon } from "@/components/icons";
+import { useToast } from "@/hooks/use-toast";
+import { uploadDocument, fetchDocuments } from "@/lib/api";
 
-type DocumentStatus = "ready" | "not-ready" | "ready-for-suggestion";
+type DocumentStatus = "pending" | "uploading" | "complete" | "error";
 
 interface DocumentFile {
   file: File;
@@ -14,10 +17,30 @@ interface DocumentFile {
   id: string;
 }
 
+interface StoredDocument {
+  document_id: string;
+  source: string;
+  created_at: string;
+}
+
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [storedDocuments, setStoredDocuments] = useState<StoredDocument[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { addToast } = useToast();
+
+  // Load previously indexed documents on mount
+  useEffect(() => {
+    fetchDocuments()
+      .then((res) => {
+        setStoredDocuments(res.items ?? []);
+      })
+      .catch((error: any) => {
+        console.error("Failed to fetch documents", error);
+      });
+  }, []);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -32,22 +55,35 @@ export default function DocumentsPage() {
     e.preventDefault();
     setIsDragging(false);
     const droppedFiles = Array.from(e.dataTransfer.files);
-    const newDocuments: DocumentFile[] = droppedFiles.map((file) => ({
-      file,
-      status: "not-ready" as DocumentStatus,
-      id: Math.random().toString(36).substring(7),
-    }));
-    setDocuments((prev) => [...prev, ...newDocuments]);
+    addFiles(droppedFiles);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const selectedFiles = Array.from(e.target.files);
-      const newDocuments: DocumentFile[] = selectedFiles.map((file) => ({
-        file,
-        status: "not-ready" as DocumentStatus,
-        id: Math.random().toString(36).substring(7),
-      }));
+      addFiles(selectedFiles);
+    }
+  };
+
+  const addFiles = (files: File[]) => {
+    const validFiles = files.filter((file) => {
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      if (!isPdf) {
+        addToast({
+          title: "Unsupported file",
+          description: `${file.name} is not a PDF.`,
+          variant: "destructive",
+        });
+      }
+      return isPdf;
+    });
+
+    const newDocuments: DocumentFile[] = validFiles.map((file) => ({
+      file,
+      status: "pending" as DocumentStatus,
+      id: Math.random().toString(36).substring(7),
+    }));
+    if (newDocuments.length > 0) {
       setDocuments((prev) => [...prev, ...newDocuments]);
     }
   };
@@ -56,34 +92,67 @@ export default function DocumentsPage() {
     setDocuments((prev) => prev.filter((doc) => doc.id !== id));
   };
 
-  const handleUpload = () => {
-    // Simulate upload and status change
-    setDocuments((prev) =>
-      prev.map((doc) => {
-        // Simulate random status assignment after upload
-        const randomStatus: DocumentStatus[] = ["ready", "not-ready", "ready-for-suggestion"];
-        const randomIndex = Math.floor(Math.random() * randomStatus.length);
-        return {
-          ...doc,
-          status: randomStatus[randomIndex],
-        };
-      })
-    );
+  const handleUpload = async () => {
+    if (documents.length === 0) {
+      return;
+    }
+
+    setIsUploading(true);
+    for (const document of documents) {
+      setDocuments((prev) =>
+        prev.map((item) =>
+          item.id === document.id ? { ...item, status: "uploading" as DocumentStatus } : item
+        )
+      );
+
+      try {
+        await uploadDocument(document.file);
+        setDocuments((prev) =>
+          prev.map((item) =>
+            item.id === document.id ? { ...item, status: "complete" as DocumentStatus } : item
+          )
+        );
+      } catch (error: any) {
+        setDocuments((prev) =>
+          prev.map((item) =>
+            item.id === document.id ? { ...item, status: "error" as DocumentStatus } : item
+          )
+        );
+        addToast({
+          title: "Upload failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    }
+    setIsUploading(false);
+
+    // Refresh stored documents list after upload completes
+    try {
+      const res = await fetchDocuments();
+      setStoredDocuments(res.items ?? []);
+    } catch (error) {
+      console.error("Failed to refresh documents", error);
+    }
   };
 
   const getStatusBadge = (status: DocumentStatus) => {
     const statusConfig = {
-      ready: {
-        label: "Ready",
-        className: "bg-foreground text-background",
-      },
-      "not-ready": {
-        label: "Not Ready",
+      pending: {
+        label: "Pending",
         className: "bg-muted text-muted-foreground border border-border",
       },
-      "ready-for-suggestion": {
-        label: "Ready for Suggestion",
+      uploading: {
+        label: "Uploading",
         className: "bg-muted text-foreground border border-foreground/20",
+      },
+      complete: {
+        label: "Indexed",
+        className: "bg-foreground text-background",
+      },
+      error: {
+        label: "Error",
+        className: "bg-destructive text-destructive-foreground",
       },
     };
 
@@ -161,6 +230,7 @@ export default function DocumentsPage() {
                     variant="outline" 
                     type="button" 
                     onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
                   >
                     Browse Files
                   </Button>
@@ -170,7 +240,7 @@ export default function DocumentsPage() {
           </CardContent>
         </Card>
 
-        {/* Uploaded Files List */}
+        {/* Files queued for upload */}
         {documents.length > 0 && (
           <Card>
             <CardHeader>
@@ -204,6 +274,7 @@ export default function DocumentsPage() {
                       size="sm"
                       onClick={() => handleRemove(doc.id)}
                       className="text-destructive hover:text-destructive"
+                      disabled={isUploading}
                     >
                       Remove
                     </Button>
@@ -211,15 +282,48 @@ export default function DocumentsPage() {
                 ))}
               </div>
               <div className="mt-6 flex gap-3">
-                <Button className="flex-1" onClick={handleUpload}>
-                  Upload All
+                <Button className="flex-1" onClick={handleUpload} disabled={isUploading}>
+                  {isUploading ? "Uploading..." : "Upload All"}
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setDocuments([])}
+                  disabled={isUploading}
                 >
                   Clear All
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Stored / Indexed Documents */}
+        {storedDocuments.length > 0 && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Indexed Documents</CardTitle>
+              <CardDescription>
+                These documents are already processed and stored in your knowledge base.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {storedDocuments.map((doc) => (
+                  <div
+                    key={doc.document_id + doc.source}
+                    className="flex items-center justify-between p-3 border border-border rounded-md"
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <FileIcon className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{doc.source}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Indexed at {new Date(doc.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>

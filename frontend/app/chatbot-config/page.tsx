@@ -1,33 +1,89 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { fetchChatbotConfig, updateChatbotConfig } from "@/lib/api";
 
-type AIModel = "gpt-4" | "gpt-3.5-turbo" | "claude-3-opus" | "claude-3-sonnet" | "gemini-pro";
+type AIModel = "gpt-4" | "gpt-3.5-turbo" | "claude-3-opus" | "claude-3-sonnet" | "gemini-2.5-flash";
+const MODEL_PROVIDER: Record<AIModel, "openai" | "anthropic" | "google"> = {
+  "gpt-4": "openai",
+  "gpt-3.5-turbo": "openai",
+  "claude-3-opus": "anthropic",
+  "claude-3-sonnet": "anthropic",
+  "gemini-2.5-flash": "google",
+};
 
 export default function ChatbotConfigPage() {
   const [selectedModel, setSelectedModel] = useState<AIModel>("gpt-4");
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasStoredKey, setHasStoredKey] = useState(false);
   const { addToast } = useToast();
 
-  const handleSave = () => {
-    // Save configuration to localStorage or backend
-    localStorage.setItem("chatbot-model", selectedModel);
-    if (apiKey) {
-      localStorage.setItem("chatbot-api-key", apiKey);
+  useEffect(() => {
+    fetchChatbotConfig()
+      .then(({ data }) => {
+        if (data.model && (Object.keys(MODEL_PROVIDER) as AIModel[]).includes(data.model as AIModel)) {
+          setSelectedModel(data.model as AIModel);
+        }
+        setHasStoredKey(Boolean(data.has_api_key));
+      })
+      .catch((error) => {
+        addToast({
+          title: "Failed to load config",
+          description: error.message,
+          variant: "destructive",
+        });
+      })
+      .finally(() => setIsLoading(false));
+  }, [addToast]);
+
+  const provider = useMemo(() => MODEL_PROVIDER[selectedModel], [selectedModel]);
+
+  const handleSave = useCallback(async () => {
+    try {
+      setIsSaving(true);
+      if (!apiKey) {
+        if (hasStoredKey) {
+          addToast({
+            title: "API key required",
+            description: "Enter a new API key when updating your configuration.",
+            variant: "destructive",
+          });
+          return;
+        }
+        addToast({
+          title: "API key required",
+          description: "Enter an API key for the selected provider.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await updateChatbotConfig({ provider, api_key: apiKey, model: selectedModel });
+      setApiKey("");
+      setHasStoredKey(true);
+      addToast({
+        title: "Configuration Saved",
+        description: "Your chatbot settings are stored securely.",
+        variant: "success",
+      });
+    } catch (error: any) {
+      addToast({
+        title: "Failed to save",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
     }
-    addToast({
-      title: "Configuration Saved",
-      description: "Your chatbot settings have been saved successfully.",
-      variant: "success",
-    });
-  };
+  }, [addToast, apiKey, hasStoredKey, provider, selectedModel]);
 
   const handleCopyApiKey = () => {
     if (apiKey) {
@@ -72,7 +128,7 @@ export default function ChatbotConfigPage() {
                 <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
                 <option value="claude-3-opus">Claude 3 Opus</option>
                 <option value="claude-3-sonnet">Claude 3 Sonnet</option>
-                <option value="gemini-pro">Gemini Pro</option>
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
               </Select>
             </div>
             <div className="bg-muted p-4 rounded-md">
@@ -106,6 +162,7 @@ export default function ChatbotConfigPage() {
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   className="pr-20"
+                  disabled={isLoading}
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-2">
                   <Button
@@ -113,6 +170,7 @@ export default function ChatbotConfigPage() {
                     size="sm"
                     onClick={() => setShowApiKey(!showApiKey)}
                     className="h-8 px-2"
+                    disabled={isLoading}
                   >
                     {showApiKey ? "Hide" : "Show"}
                   </Button>
@@ -129,8 +187,13 @@ export default function ChatbotConfigPage() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Your API key is stored locally and used for chatbot requests. Keep it secure and never share it publicly.
+                Your API key is encrypted on the server. Keep a copy for your records; the full value is not retrievable later.
               </p>
+              {hasStoredKey && !apiKey && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  A key is already stored. Enter a new value to rotate it.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -204,11 +267,12 @@ export default function ChatbotConfigPage() {
                 variant: "default",
               });
             }}
+            disabled={isLoading || isSaving}
           >
             Reset
           </Button>
-          <Button onClick={handleSave}>
-            Save Configuration
+          <Button onClick={handleSave} disabled={isLoading || isSaving}>
+            {isSaving ? "Saving..." : "Save Configuration"}
           </Button>
         </div>
       </div>

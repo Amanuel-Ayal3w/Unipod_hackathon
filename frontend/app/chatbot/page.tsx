@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import { sendChatMessage } from "@/lib/api";
 
 interface Message {
   id: number;
@@ -25,6 +26,7 @@ export default function ChatbotPage() {
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { addToast } = useToast();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -38,7 +40,7 @@ export default function ChatbotPage() {
     if (!inputValue.trim()) return;
 
     const userMessage: Message = {
-      id: messages.length + 1,
+      id: Date.now(),
       text: inputValue,
       sender: "user",
       timestamp: new Date(),
@@ -48,17 +50,24 @@ export default function ChatbotPage() {
     setInputValue("");
     setIsTyping(true);
 
-    // Simulate bot response
-    setTimeout(() => {
-      const botMessage: Message = {
-        id: messages.length + 2,
-        text: "Thank you for your message. This is a demo chatbot interface. In a real implementation, this would connect to your AI backend.",
-        sender: "bot",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, botMessage]);
-      setIsTyping(false);
-    }, 1000);
+    sendChatMessage({ message: userMessage.text })
+      .then((payload) => {
+        const botMessage: Message = {
+          id: Date.now() + 1,
+          text: payload.response,
+          sender: "bot",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, botMessage]);
+      })
+      .catch((error: any) => {
+        addToast({
+          title: "Chat request failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      })
+      .finally(() => setIsTyping(false));
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -77,14 +86,7 @@ export default function ChatbotPage() {
       <div className="container mx-auto px-4 py-8 max-w-4xl flex-1 flex flex-col">
         {/* Header */}
         <div className="mb-6">
-          <div className="flex items-start justify-between mb-2">
-            <h1 className="text-3xl font-semibold">Chatbot</h1>
-            <Link href="/chatbot-config">
-              <Button variant="outline" size="sm">
-                Configure
-              </Button>
-            </Link>
-          </div>
+          <h1 className="text-3xl font-semibold mb-2">Chatbot</h1>
           <p className="text-muted-foreground">
             Test and interact with your AI assistant.
           </p>

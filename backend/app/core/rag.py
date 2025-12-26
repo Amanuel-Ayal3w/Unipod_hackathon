@@ -4,8 +4,6 @@ import uuid
 from typing import List, Optional, Tuple
 
 from fastapi import HTTPException, UploadFile, status
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import SupabaseVectorStore
 from langchain_core.prompts import ChatPromptTemplate
@@ -53,7 +51,8 @@ async def ingest_pdf_to_vector_store(file: UploadFile, bot_id: str) -> Tuple[str
         c.metadata["bot_id"] = bot_id
         c.metadata["document_id"] = document_id
 
-    embeddings = GoogleGenerativeAIEmbeddings(model="text-embedding-004")
+    # Use API key from bot config for embeddings
+    _, embeddings = _get_llm_for_bot(bot_id)
     client = get_supabase_client()
 
     SupabaseVectorStore.from_documents(
@@ -68,28 +67,47 @@ async def ingest_pdf_to_vector_store(file: UploadFile, bot_id: str) -> Tuple[str
 
 
 def _get_llm_for_bot(bot_id: str):
+    """Return LLM and embeddings for a bot.
+
+    In production, this prefers per-bot config stored in user_api_keys.
+    For demo / local setups where that table or config may not exist,
+    it falls back to GOOGLE_API_KEY or GEMINI_API_KEY from the
+    environment, using a default Gemini model.
+    """
+
     config = get_user_llm_config(bot_id)
-    if not config:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="LLM_CONFIG_NOT_FOUND",
-        )
 
-    if config["provider"] != "google":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="ONLY_GOOGLE_GEMINI_SUPPORTED",
-        )
+    if config:
+        if config["provider"] != "google":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ONLY_GOOGLE_GEMINI_SUPPORTED",
+            )
 
-    api_key = config["api_key"]
-    model = config.get("model") or "gemini-1.5-flash"
+        api_key = config["api_key"]
+        # Use the exact model string from config, or default to Gemini 2.5 Flash
+        model = (config.get("model") or "gemini-2.5-flash").strip()
+    else:
+        api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="GEMINI_API_KEY_NOT_CONFIGURED",
+            )
+        # Default model when no per-bot config is stored
+        model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
 
     llm = ChatGoogleGenerativeAI(
         model=model,
         google_api_key=api_key,
         temperature=0.2,
     )
-    embeddings = GoogleGenerativeAIEmbeddings(model="text-embedding-004")
+
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="text-embedding-004",
+        api_key=api_key,
+    )
+
     return llm, embeddings
 
 
@@ -101,38 +119,52 @@ async def chat_with_rag(
     client = get_supabase_client()
     llm, embeddings = _get_llm_for_bot(bot_id)
 
-    vector_store = SupabaseVectorStore(
-        client=client,
-        embedding=embeddings,
-        table_name="documents",
-        query_name="match_documents",
-    )
+    # --- Retrieve relevant documents via Supabase RPC directly ---
+    # 1) Embed the user query
+    query_embedding = embeddings.embed_query(message)
 
-    retriever = vector_store.as_retriever(
-        search_kwargs={"k": 5, "filter": {"bot_id": bot_id}},
-    )
+    # 2) Call the match_documents RPC in Supabase
+    resp = client.rpc(
+        "match_documents",
+        {
+            "query_embedding": query_embedding,
+            "match_count": 5,
+            "filter": {"bot_id": bot_id},
+        },
+    ).execute()
+
+    rows = getattr(resp, "data", None) or []
+
+    # 3) Convert rows into a lightweight document-like structure
+    docs = [
+        {
+            "page_content": row.get("content") or "",
+            "metadata": row.get("metadata") or {},
+        }
+        for row in rows
+    ]
 
     prompt = ChatPromptTemplate.from_template(
         """You are a helpful support assistant for Ethiopian government services.\nUse ONLY the provided context to answer.\n\nContext:\n{context}\n\nExtra_user_context:\n{extra_context}\n\nQuestion:\n{input}\n\nIf the answer is not in the context, say you don't know."""
     )
 
-    document_chain = create_stuff_documents_chain(llm, prompt)
-    rag_chain = create_retrieval_chain(retriever, document_chain)
+    # 4) Build context string from retrieved documents
+    context_text = "\n\n".join(d["page_content"] for d in docs)
 
-    result = rag_chain.invoke(
-        {
-            "input": message,
-            "extra_context": context or "",
-        }
+    # 5) Format prompt messages and call the LLM directly
+    messages = prompt.format_messages(
+        context=context_text,
+        extra_context=context or "",
+        input=message,
     )
 
-    answer = result.get("answer", "")
-    docs = result.get("context", [])
+    response = llm.invoke(messages)
+    answer = getattr(response, "content", str(response))
     sources = sorted(
         {
-            d.metadata.get("source")
+            d["metadata"].get("source")
             for d in docs
-            if d.metadata.get("source")
+            if d["metadata"].get("source")
         }
     )
 

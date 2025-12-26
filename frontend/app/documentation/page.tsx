@@ -10,7 +10,7 @@ export default function DocumentationPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-semibold mb-2">Documentation</h1>
           <p className="text-muted-foreground">
-            Complete guide to integrating and using the Lasta AI assistant.
+            Guide to integrating the Lasta AI assistant via the JavaScript SDK, browser widget, and dashboard.
           </p>
         </div>
 
@@ -33,9 +33,10 @@ export default function DocumentationPage() {
             <div>
               <h3 className="text-lg font-semibold mb-2">Prerequisites</h3>
               <ul className="list-disc list-inside text-muted-foreground space-y-1">
-                <li>Valid API key (Live or Test)</li>
+                <li>Backend URL (e.g. https://api.yourdomain.com)</li>
+                <li>API key from the Integration page</li>
                 <li>Access to your website's HTML/JavaScript</li>
-                <li>Documents uploaded and processed in the dashboard</li>
+                <li>Documents uploaded and processed via the Documents page</li>
               </ul>
             </div>
           </CardContent>
@@ -53,59 +54,78 @@ export default function DocumentationPage() {
             <div>
               <h3 className="text-lg font-semibold mb-2">API Keys</h3>
               <p className="text-muted-foreground mb-4">
-                Your API key is used to authenticate all requests to the Lasta AI service. 
-                Keep your API key secure and never expose it in client-side code or public repositories.
+                Your API key identifies your chatbot when calling the SupportBot backend. Keep it secret in server-side code or environment variables when possible.
               </p>
               <div className="bg-muted p-4 rounded-md font-mono text-sm">
-                <code>lk_live_sk_...</code>
+                <code>sk_demo_************************</code>
               </div>
             </div>
             <div>
               <h3 className="text-lg font-semibold mb-2">Using Your API Key</h3>
               <p className="text-muted-foreground mb-2">
-                Include your API key in the Authorization header:
+                For direct HTTP calls, include your API key in the <code>x-api-key</code> header:
               </p>
               <div className="bg-muted p-4 rounded-md font-mono text-sm">
-                <code>Authorization: Bearer YOUR_API_KEY</code>
+                <code>x-api-key: YOUR_API_KEY</code>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Widget Installation */}
+        {/* SDK & Widget Installation */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Widget Installation</CardTitle>
+            <CardTitle>SDK & Widget Installation</CardTitle>
             <CardDescription>
-              Step-by-step guide to embed the chatbot widget
+              Use the TypeScript SDK in your app, or embed the browser widget
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <h3 className="text-lg font-semibold mb-2">JavaScript SDK</h3>
+              <h3 className="text-lg font-semibold mb-2">TypeScript / JavaScript SDK</h3>
               <p className="text-muted-foreground mb-4">
-                Add the Lasta AI widget to your website by including our JavaScript SDK in your HTML.
+                Install the SDK in your application and call the <code>/chat</code> endpoint through a simple client.
               </p>
               <div className="bg-muted p-4 rounded-md">
                 <pre className="text-sm overflow-x-auto">
-{`<script src="https://cdn.lasta.ai/widget.js"></script>
-<script>
-  Lasta.init({
-    apiKey: 'YOUR_API_KEY',
-    position: 'bottom-right'
-  });
-</script>`}
+{`npm install @supportbot/sdk
+
+import { createSupportBotClient } from "@supportbot/sdk";
+
+const client = createSupportBotClient({
+  baseUrl: "https://api.yourdomain.com",
+  apiKey: "YOUR_API_KEY",
+});
+
+const res = await client.sendMessage({
+  message: "Hello from my app",
+});`}
                 </pre>
               </div>
             </div>
             <div>
-              <h3 className="text-lg font-semibold mb-2">Installation Steps</h3>
-              <ol className="list-decimal list-inside text-muted-foreground space-y-2">
+              <h3 className="text-lg font-semibold mb-2">Browser Widget</h3>
+              <p className="text-muted-foreground mb-2">
+                To quickly embed the chatbot on any website, use the browser widget helper:
+              </p>
+              <div className="bg-muted p-4 rounded-md">
+                <pre className="text-sm overflow-x-auto">
+{`<script type="module">
+  import { attachSupportBotWidget } from "https://your-cdn.com/supportbot-sdk.js";
+
+  attachSupportBotWidget({
+    baseUrl: "https://api.yourdomain.com",
+    apiKey: "YOUR_API_KEY",
+    welcomeMessage: "Hi! How can I help you today?",
+  });
+</script>`}
+                </pre>
+              </div>
+              <ol className="list-decimal list-inside text-muted-foreground space-y-2 mt-3">
                 <li>Copy your API key from the Integration page</li>
-                <li>Add the script tag to your website's footer or before the closing body tag</li>
-                <li>Replace YOUR_API_KEY with your actual API key</li>
-                <li>Save and deploy your changes</li>
-                <li>The chatbot widget will appear on your website</li>
+                <li>Add the widget snippet before <code>&lt;/body&gt;</code> on your site</li>
+                <li>Replace <code>YOUR_API_KEY</code> and <code>https://api.yourdomain.com</code> with your values</li>
+                <li>Deploy your site—the chat bubble appears in the bottom-right corner</li>
               </ol>
             </div>
           </CardContent>
@@ -121,27 +141,30 @@ export default function DocumentationPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <h3 className="text-lg font-semibold mb-2">Widget Position</h3>
+              <h3 className="text-lg font-semibold mb-2">Widget Options</h3>
               <p className="text-muted-foreground mb-2">
-                Choose where the chatbot widget appears on your page:
+                The browser widget helper accepts a small set of options:
               </p>
-              <ul className="list-disc list-inside text-muted-foreground space-y-1">
-                <li><code>bottom-right</code> - Bottom right corner (default)</li>
-                <li><code>bottom-left</code> - Bottom left corner</li>
-                <li><code>top-right</code> - Top right corner</li>
-                <li><code>top-left</code> - Top left corner</li>
-              </ul>
+              <div className="bg-muted p-4 rounded-md">
+                <pre className="text-sm overflow-x-auto">
+{`attachSupportBotWidget({
+  baseUrl: "https://api.yourdomain.com",
+  apiKey: "YOUR_API_KEY",
+  welcomeMessage: "Hello! How can I help you?",
+});`}
+                </pre>
+              </div>
             </div>
             <div>
               <h3 className="text-lg font-semibold mb-2">Customization</h3>
               <div className="bg-muted p-4 rounded-md">
                 <pre className="text-sm overflow-x-auto">
-{`Lasta.init({
-  apiKey: 'YOUR_API_KEY',
-  position: 'bottom-right',
-  theme: 'light',
-  primaryColor: '#000000',
-  welcomeMessage: 'Hello! How can I help you?'
+{`// For full control, you can build your own UI
+// and call the SDK client directly from your app.
+
+const res = await client.sendMessage({
+  message: "Hello!",
+  context: "optional extra context",
 });`}
                 </pre>
               </div>
@@ -189,8 +212,8 @@ export default function DocumentationPage() {
               <h3 className="text-lg font-semibold mb-2">Send Message</h3>
               <div className="bg-muted p-4 rounded-md mb-2">
                 <pre className="text-sm overflow-x-auto">
-{`POST https://api.lasta.ai/v1/chat
-Authorization: Bearer YOUR_API_KEY
+{`POST https://api.yourdomain.com/chat
+x-api-key: YOUR_API_KEY
 Content-Type: application/json
 
 {

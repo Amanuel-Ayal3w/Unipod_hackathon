@@ -17,11 +17,6 @@ const navigation = [
     icon: ChatIcon,
   },
   {
-    name: "Chatbot Config",
-    href: "/chatbot-config",
-    icon: SettingsIcon,
-  },
-  {
     name: "Integration",
     href: "/integration",
     icon: SettingsIcon,

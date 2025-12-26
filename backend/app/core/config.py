@@ -1,6 +1,14 @@
 import os
 from functools import lru_cache
 
+from dotenv import load_dotenv
+
+
+# Ensure environment variables from backend/.env are loaded when the app starts
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+ENV_PATH = os.path.join(BASE_DIR, ".env")
+load_dotenv(ENV_PATH)
+
 
 class Settings:
     def __init__(self) -> None:
